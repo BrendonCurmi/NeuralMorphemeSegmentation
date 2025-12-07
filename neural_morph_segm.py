@@ -18,6 +18,12 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping
 from read import extract_morpheme_type, read_BMES, read_splitted
 from tabled_trie import make_trie
 
+import tensorflow as tf
+import keras.backend as kb
+
+# Dependency overriding kb.one_hot to tf.one_hot so old code works
+kb.one_hot = tf.one_hot
+
 
 def read_config(infile):
     with open(infile, "r", encoding="utf8") as fin:
