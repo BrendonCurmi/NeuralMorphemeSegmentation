@@ -512,7 +512,7 @@ class Partitioner:
         Функция, задающая архитектуру нейронной сети
         """
         # symbol_inputs: array, 1D-массив длины m
-        symbol_inputs = kl.Input(shape=(None,), dtype='uint32', name="symbol_inputs")
+        symbol_inputs = kl.Input(shape=(None,), dtype='int32', name="symbol_inputs")
         # symbol_embeddings: array, 2D-массив размера m*self.symbols_number
         if self.use_embeddings:
             symbol_embeddings = kl.Embedding(self.symbols_number_, self.embeddings_size,
