@@ -520,6 +520,7 @@ class Partitioner:
         else:
             symbol_embeddings = kl.Lambda(
                 lambda x: tf.one_hot(x, depth=self.symbols_number_),
+                output_shape=lambda s: (s[0], s[1], self.symbols_number_),
                 name="symbol_embeddings"
             )(symbol_inputs)
         inputs = [symbol_inputs]
