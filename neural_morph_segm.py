@@ -640,8 +640,8 @@ class Partitioner:
                 curr_callbacks = self.callbacks
 
             # Apply to your batches
-            train_batches = fix_batches(train_batches, expected_len=9)
-            dev_batches   = fix_batches(dev_batches, expected_len=9)
+            train_batches = self.fix_batches(train_batches, expected_len=9)
+            dev_batches   = self.fix_batches(dev_batches, expected_len=9)
             model.fit(
                 train_batches,
                 steps_per_epoch=len(train_batches_indexes),
