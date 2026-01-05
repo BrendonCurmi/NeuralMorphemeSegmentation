@@ -863,25 +863,19 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
     while nepochs is None or nsteps < nepochs:
         if shuffle:
             np.random.shuffle(indexes)
-        for i, bucket_indexes in indexes:
-            curr_bucket, curr_targets = data[i], targets[i]
+        for bucket_idx, batch_indexes in indexes:
+            curr_bucket = data[bucket_idx]
+            curr_targets = targets[bucket_idx]
 
-            # Pad input sequences dynamically to the max length in this batch
+            # Pad input sequences for each input in the bucket
             padded_inputs = []
             for inp_array in curr_bucket:
-                # inp_array has shape (N, L) -> subset the batch
-                batch_inp = inp_array[bucket_indexes]
-                # find max length in this batch
-                max_len = max(len(seq) for seq in batch_inp)
-                # pad sequences to max_len
-                batch_inp_padded = pad_sequences(batch_inp, maxlen=max_len, padding='post', value=0)
-                padded_inputs.append(batch_inp_padded)
+                batch_inp = inp_array[batch_indexes]  # shape (batch, seq_len)
+                padded_inputs.append(batch_inp)      # already padded in _make_bucket_data
 
-            # Pad target sequences similarly
-            batch_targets = curr_targets[bucket_indexes]
-            max_len = max(len(seq) for seq in batch_targets)
-            targets_padded = pad_sequences(batch_targets, maxlen=max_len, padding='post', value=0)
-            targets_one_hot = to_one_hot(targets_padded, classes_number)
+            # Pad target sequences and convert to one-hot
+            batch_targets = curr_targets[batch_indexes]  # shape (batch, seq_len)
+            targets_one_hot = np.eye(classes_number)[batch_targets]  # shape (batch, seq_len, classes_number)
 
             yield tuple(padded_inputs), targets_one_hot
         nsteps += 1
