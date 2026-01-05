@@ -39,6 +39,9 @@ def to_one_hot(data, classes_number):
     return answer[data]
 
 def make_model_file(name, i):
+    if name.endswith(".weights.h5"):
+        base = name[:-len(".weights.h5")]
+        return f"{base}-{i}.weights.h5"
     pos = name.rfind(".")
     if pos != -1:
         return "{}-{}.{}".format(name[:pos], i, name[pos+1:])
