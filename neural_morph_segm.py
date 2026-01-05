@@ -518,9 +518,11 @@ class Partitioner:
             symbol_embeddings = kl.Embedding(self.symbols_number_, self.embeddings_size,
                                              name="symbol_embeddings")(symbol_inputs)
         else:
-            symbol_embeddings = kl.Lambda(tf.one_hot, output_shape=(None, self.symbols_number_),
-                                          arguments={"num_classes": self.symbols_number_},
-                                          name="symbol_embeddings")(symbol_inputs)
+            symbol_embeddings = kl.Lambda(
+                lambda x: tf.one_hot(tf.cast(x, tf.int32), depth=self.symbols_number_),
+                output_shape=(None, self.symbols_number_),
+                name="symbol_embeddings"
+            )(symbol_inputs)
         inputs = [symbol_inputs]
         if self.to_memorize_morphemes:
             # context_inputs: array, 2D-массив размера m*15
