@@ -638,6 +638,7 @@ class Partitioner:
                 curr_callbacks = self.callbacks + [save_callback]
             else:
                 curr_callbacks = self.callbacks
+
             # Apply to your batches
             train_batches = fix_batches(train_batches, expected_len=9)
             dev_batches   = fix_batches(dev_batches, expected_len=9)
