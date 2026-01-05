@@ -1,0 +1,6 @@
+{
+    "load_file": "models/train-3-5.json",
+    "test_file": "data/test_Tikhonov_reformat.txt",
+    "outfile": "results/testing_3-5.txt",
+      "english_metrics": true
+}
