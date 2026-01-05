@@ -573,6 +573,28 @@ class Partitioner:
                       loss="categorical_crossentropy", metrics=["accuracy"])
         return model
 
+
+    # Helper to fix batch shapes
+    def fix_batch(batch_inputs, batch_targets, expected_len=9):
+        # Truncate if too long
+        if batch_inputs.shape[1] > expected_len:
+            batch_inputs = batch_inputs[:, :expected_len]
+        # Pad with zeros if too short
+        elif batch_inputs.shape[1] < expected_len:
+            pad_width = expected_len - batch_inputs.shape[1]
+            batch_inputs = np.pad(batch_inputs, ((0,0),(0,pad_width)), mode='constant')
+        return batch_inputs, batch_targets
+
+    # Wrap your train generator
+    def fixed_train_gen():
+        for batch_inputs, batch_targets in train_gen:
+            yield fix_batch(batch_inputs, batch_targets)
+
+    # Wrap your validation generator
+    def fixed_val_gen():
+        for batch_inputs, batch_targets in val_gen:
+            yield fix_batch(batch_inputs, batch_targets)
+
     def _train_models(self, data_by_buckets, targets_by_buckets,
                       dev_data_by_buckets=None, dev_targets_by_buckets=None, model_file=None):
         """
@@ -625,9 +647,14 @@ class Partitioner:
                 curr_callbacks = self.callbacks + [save_callback]
             else:
                 curr_callbacks = self.callbacks
-            model.fit(train_gen, steps_per_epoch=len(train_batches_indexes),
-                                epochs=self.nepochs, callbacks=curr_callbacks,
-                                validation_data=val_gen, validation_steps=len(dev_batches_indexes))
+            model.fit(
+                fixed_train_gen(),
+                steps_per_epoch=len(train_batches_indexes),
+                epochs=self.nepochs,
+                callbacks=curr_callbacks,
+                validation_data=fixed_val_gen(),
+                validation_steps=len(dev_batches_indexes)
+            )
             if model_file is not None:
                 model.load_weights(curr_model_file)
         return self
