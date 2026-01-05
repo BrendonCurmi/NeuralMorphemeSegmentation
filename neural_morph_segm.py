@@ -524,7 +524,7 @@ class Partitioner:
                 output_shape=lambda s: (s[0], s[1], self.symbols_number_),
                 name="symbol_embeddings"
             )(symbol_inputs)
-        inputs = [symbol_inputs]
+        inputs = [symbol_inputás]
         if self.to_memorize_morphemes:
             # context_inputs: array, 2D-массив размера m*15
             context_inputs = kl.Input(shape=(None, self.memory_dim), dtype='float32', name="context_inputs")
