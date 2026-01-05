@@ -844,20 +844,7 @@ class Partitioner:
 
 def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs=None):
     """
-
-    data: list of lists of arrays,
-        data = [bucket_1, ..., bucket_m],
-        bucket = [input_1, ..., input_k], k --- число входов в графе вычислений
-    targets: list of arrays,
-        targets[i,j] --- код j-ой метки при морфемоделении i-го слова
-    indexes: list of pairs,
-        indexes = [(i_1, bucket_indexes_1), ...]
-        i_j --- номер корзины, откуда берутся элементы j-го батча
-        bucket_indexes_j --- номера элементов j-го батча в соответствующей корзине
-    shuffle: boolean, default=False, нужно ли перемешивать порядок батчей
-    nepochs: int or None, default=None,
-        число эпох, в течение которых генератор выдаёт батчи, в случае None генератор бесконечен
-    :return:
+    Fixed generator to ensure batch shapes match expected output dimensions.
     """
     nsteps = 0
     while nepochs is None or nsteps < nepochs:
@@ -867,18 +854,26 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             curr_bucket = data[bucket_idx]
             curr_targets = targets[bucket_idx]
 
-            # Pad input sequences for each input in the bucket
+            # Ensure all inputs have the same sequence length
             padded_inputs = []
+            seq_len = curr_bucket[0].shape[1] if isinstance(curr_bucket, list) else curr_bucket.shape[1]
             for inp_array in curr_bucket:
-                batch_inp = inp_array[batch_indexes]  # shape (batch, seq_len)
-                padded_inputs.append(batch_inp)      # already padded in _make_bucket_data
+                batch_inp = inp_array[batch_indexes]
+                if batch_inp.shape[1] != seq_len:
+                    pad_width = seq_len - batch_inp.shape[1]
+                    batch_inp = np.pad(batch_inp, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
+                padded_inputs.append(batch_inp)
 
-            # Pad target sequences and convert to one-hot
-            batch_targets = curr_targets[batch_indexes]  # shape (batch, seq_len)
-            targets_one_hot = np.eye(classes_number)[batch_targets]  # shape (batch, seq_len, classes_number)
+            # Ensure targets are one-hot and match batch seq_len
+            batch_targets = curr_targets[batch_indexes]
+            if batch_targets.shape[1] != seq_len:
+                pad_width = seq_len - batch_targets.shape[1]
+                batch_targets = np.pad(batch_targets, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
+            targets_one_hot = np.eye(classes_number, dtype=np.float32)[batch_targets]
 
             yield tuple(padded_inputs), targets_one_hot
         nsteps += 1
+
 
 
 def measure_quality(targets, predicted_targets, english_metrics=False, measure_last=True):
