@@ -573,24 +573,6 @@ class Partitioner:
                       loss="categorical_crossentropy", metrics=["accuracy"])
         return model
 
-
-
-    def pad_or_truncate(self, batch, target_len=10):
-        """
-        Ensure batch is a 2D numpy array with shape (num_samples, target_len)
-        If batch is 1D, expand dims to make it 2D.
-        Then pad or truncate columns to match target_len.
-        """
-        batch = np.array(batch)
-        if batch.ndim == 1:
-            batch = np.expand_dims(batch, axis=0)  # make it (1, len(batch))
-        if batch.shape[1] > target_len:
-            return batch[:, :target_len]
-        elif batch.shape[1] < target_len:
-            pad_width = target_len - batch.shape[1]
-            return np.pad(batch, ((0, 0), (0, pad_width)), mode='constant')
-        return batch
-
     def _train_models(self, data_by_buckets, targets_by_buckets,
                       dev_data_by_buckets=None, dev_targets_by_buckets=None, model_file=None):
         """
@@ -643,24 +625,9 @@ class Partitioner:
                 curr_callbacks = self.callbacks + [save_callback]
             else:
                 curr_callbacks = self.callbacks
-
-            # Process each bucket
-            for bucket_idx in range(len(data_by_buckets)):
-                data_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in data_by_buckets[bucket_idx]]
-                targets_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in targets_by_buckets[bucket_idx]]
-
-            # Flatten all buckets into a single training set
-            train_X = np.vstack([batch for bucket in data_by_buckets for batch in bucket])
-            train_y = np.vstack([batch for bucket in targets_by_buckets for batch in bucket])
-
-            # Fit the model
-            model.fit(
-                train_X,
-                train_y,
-                epochs=self.nepochs,
-                callbacks=curr_callbacks,
-                validation_split=0.1
-            )
+            model.fit(train_gen, steps_per_epoch=len(train_batches_indexes),
+                      epochs=self.nepochs, callbacks=curr_callbacks,
+                      validation_data=val_gen, validation_steps=len(dev_batches_indexes))
             if model_file is not None:
                 model.load_weights(curr_model_file)
         return self
@@ -877,42 +844,46 @@ class Partitioner:
 
 def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs=None):
     """
-    Generator that ensures all batches have the same sequence length to match model input.
+
+    data: list of lists of arrays,
+        data = [bucket_1, ..., bucket_m],
+        bucket = [input_1, ..., input_k], k --- число входов в графе вычислений
+    targets: list of arrays,
+        targets[i,j] --- код j-ой метки при морфемоделении i-го слова
+    indexes: list of pairs,
+        indexes = [(i_1, bucket_indexes_1), ...]
+        i_j --- номер корзины, откуда берутся элементы j-го батча
+        bucket_indexes_j --- номера элементов j-го батча в соответствующей корзине
+    shuffle: boolean, default=False, нужно ли перемешивать порядок батчей
+    nepochs: int or None, default=None,
+        число эпох, в течение которых генератор выдаёт батчи, в случае None генератор бесконечен
+    :return:
     """
     nsteps = 0
     while nepochs is None or nsteps < nepochs:
         if shuffle:
             np.random.shuffle(indexes)
-        for bucket_idx, batch_indexes in indexes:
-            curr_bucket = data[bucket_idx]
-            curr_targets = targets[bucket_idx]
+        for i, bucket_indexes in indexes:
+            curr_bucket, curr_targets = data[i], targets[i]
 
-            # If input has multiple arrays (symbol_inputs + context_inputs)
-            if isinstance(curr_bucket, list):
-                batch_inputs = []
-                max_seq_len = max(arr.shape[1] for arr in curr_bucket)
-                for arr in curr_bucket:
-                    batch_arr = arr[batch_indexes]
-                    # pad to max_seq_len if necessary
-                    if batch_arr.shape[1] < max_seq_len:
-                        pad_width = max_seq_len - batch_arr.shape[1]
-                        if batch_arr.ndim == 2:
-                            batch_arr = np.pad(batch_arr, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
-                        elif batch_arr.ndim == 3:
-                            batch_arr = np.pad(batch_arr, ((0,0),(0,pad_width),(0,0)), mode='constant', constant_values=0)
-                    batch_inputs.append(batch_arr)
-            else:
-                batch_inputs = curr_bucket[batch_indexes]
-                max_seq_len = batch_inputs.shape[1]
+            # Pad input sequences dynamically to the max length in this batch
+            padded_inputs = []
+            for inp_array in curr_bucket:
+                # inp_array has shape (N, L) -> subset the batch
+                batch_inp = inp_array[bucket_indexes]
+                # find max length in this batch
+                max_len = max(len(seq) for seq in batch_inp)
+                # pad sequences to max_len
+                batch_inp_padded = pad_sequences(batch_inp, maxlen=max_len, padding='post', value=0)
+                padded_inputs.append(batch_inp_padded)
 
-            # Process targets: pad if necessary, then convert to one-hot
-            batch_targets = curr_targets[batch_indexes]
-            if batch_targets.shape[1] < max_seq_len:
-                pad_width = max_seq_len - batch_targets.shape[1]
-                batch_targets = np.pad(batch_targets, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
-            batch_targets_one_hot = np.eye(classes_number, dtype=np.float32)[batch_targets]
+            # Pad target sequences similarly
+            batch_targets = curr_targets[bucket_indexes]
+            max_len = max(len(seq) for seq in batch_targets)
+            targets_padded = pad_sequences(batch_targets, maxlen=max_len, padding='post', value=0)
+            targets_one_hot = to_one_hot(targets_padded, classes_number)
 
-            yield (tuple(batch_inputs) if isinstance(batch_inputs, list) else batch_inputs, batch_targets_one_hot)
+            yield tuple(padded_inputs), targets_one_hot
         nsteps += 1
 
 
