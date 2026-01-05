@@ -574,17 +574,14 @@ class Partitioner:
         return model
 
 
-    def fix_batches(self, batches, expected_len=9):
-        fixed = []
-        for batch_inputs, batch_targets in batches:
-            # truncate or pad
-            if batch_inputs.shape[1] > expected_len:
-                batch_inputs = batch_inputs[:, :expected_len]
-            elif batch_inputs.shape[1] < expected_len:
-                pad_width = expected_len - batch_inputs.shape[1]
-                batch_inputs = np.pad(batch_inputs, ((0,0),(0,pad_width)), mode='constant')
-            fixed.append((batch_inputs, batch_targets))
-        return fixed
+
+    def pad_or_truncate(self, x, target_len=9):
+        if x.shape[1] > target_len:
+            return x[:, :target_len]
+        elif x.shape[1] < target_len:
+            pad_width = target_len - x.shape[1]
+            return np.pad(x, ((0,0),(0,pad_width)), mode='constant')
+        return x
 
     def _train_models(self, data_by_buckets, targets_by_buckets,
                       dev_data_by_buckets=None, dev_targets_by_buckets=None, model_file=None):
@@ -639,16 +636,21 @@ class Partitioner:
             else:
                 curr_callbacks = self.callbacks
 
-            # Apply to your batches
-            train_batches = self.fix_batches(train_batches, expected_len=9)
-            dev_batches   = self.fix_batches(dev_batches, expected_len=9)
+            # Apply to training and validation data before model.fit
+            for bucket in data_by_buckets:
+                data_by_buckets[bucket] = [self.pad_or_truncate(np.array(batch)) for batch in data_by_buckets[bucket]]
+            for bucket in targets_by_buckets:
+                targets_by_buckets[bucket] = [np.array(batch) for batch in targets_by_buckets[bucket]]
+
+            train_X = np.vstack([batch for batches in data_by_buckets.values() for batch in batches])
+            train_y = np.vstack([batch for batches in targets_by_buckets.values() for batch in batches])
+
             model.fit(
-                train_batches,
-                steps_per_epoch=len(train_batches_indexes),
+                train_X,
+                train_y,
                 epochs=self.nepochs,
                 callbacks=curr_callbacks,
-                validation_data=dev_batches,
-                validation_steps=len(dev_batches_indexes)
+                validation_split=0.1  # or use a separate validation set if you have one
             )
             if model_file is not None:
                 model.load_weights(curr_model_file)
