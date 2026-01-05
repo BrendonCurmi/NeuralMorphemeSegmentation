@@ -575,7 +575,9 @@ class Partitioner:
 
 
 
-    def pad_or_truncate(self, batch, target_len=9):
+    def pad_or_truncate(self, batch, target_len=10):  # Make sure target_len matches your model input
+        """Pad or truncate a 2D numpy array to a fixed number of columns."""
+        batch = np.array(batch)
         if batch.shape[1] > target_len:
             return batch[:, :target_len]
         elif batch.shape[1] < target_len:
@@ -636,19 +638,14 @@ class Partitioner:
             else:
                 curr_callbacks = self.callbacks
 
-            # Flatten the data and targets from all buckets first
-            all_data = []
-            all_targets = []
+            # Process data by buckets
+            for bucket_idx in range(len(data_by_buckets)):
+                data_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in data_by_buckets[bucket_idx]]
+                targets_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in targets_by_buckets[bucket_idx]]
 
-            for bucket_batches, target_batches in zip(data_by_buckets, targets_by_buckets):
-                for batch, target in zip(bucket_batches, target_batches):
-                    batch_array = np.array(batch)
-                    target_array = np.array(target)
-                    all_data.append(self.pad_or_truncate(batch_array))
-                    all_targets.append(target_array)
-
-            train_X = np.vstack(all_data)
-            train_y = np.vstack(all_targets)
+            # Flatten all buckets into a single training set
+            train_X = np.vstack([batch for bucket in data_by_buckets for batch in bucket])
+            train_y = np.vstack([batch for bucket in targets_by_buckets for batch in bucket])
 
             # Fit the model
             model.fit(
@@ -656,7 +653,7 @@ class Partitioner:
                 train_y,
                 epochs=self.nepochs,
                 callbacks=curr_callbacks,
-                validation_split=0.1  # or a separate dev set if available
+                validation_split=0.1  # or use dev set if available
             )
             if model_file is not None:
                 model.load_weights(curr_model_file)
