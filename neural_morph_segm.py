@@ -575,13 +575,13 @@ class Partitioner:
 
 
 
-    def pad_or_truncate(self, x, target_len=9):
-        if x.shape[1] > target_len:
-            return x[:, :target_len]
-        elif x.shape[1] < target_len:
-            pad_width = target_len - x.shape[1]
-            return np.pad(x, ((0,0),(0,pad_width)), mode='constant')
-        return x
+    def pad_or_truncate(self, batch, target_len=9):
+        if batch.shape[1] > target_len:
+            return batch[:, :target_len]
+            elif batch.shape[1] < target_len:
+            pad_width = target_len - batch.shape[1]
+            return np.pad(batch, ((0, 0), (0, pad_width)), mode='constant')
+        return batch
 
     def _train_models(self, data_by_buckets, targets_by_buckets,
                       dev_data_by_buckets=None, dev_targets_by_buckets=None, model_file=None):
@@ -636,21 +636,27 @@ class Partitioner:
             else:
                 curr_callbacks = self.callbacks
 
-            # Apply to training and validation data before model.fit
-            for bucket in data_by_buckets:
-                data_by_buckets[bucket] = [self.pad_or_truncate(np.array(batch)) for batch in data_by_buckets[bucket]]
-            for bucket in targets_by_buckets:
-                targets_by_buckets[bucket] = [np.array(batch) for batch in targets_by_buckets[bucket]]
+            # Flatten the data and targets from all buckets first
+            all_data = []
+            all_targets = []
 
-            train_X = np.vstack([batch for batches in data_by_buckets.values() for batch in batches])
-            train_y = np.vstack([batch for batches in targets_by_buckets.values() for batch in batches])
+            for bucket_batches, target_batches in zip(data_by_buckets, targets_by_buckets):
+                for batch, target in zip(bucket_batches, target_batches):
+                    batch_array = np.array(batch)
+                    target_array = np.array(target)
+                    all_data.append(self.pad_or_truncate(batch_array))
+                    all_targets.append(target_array)
 
+            train_X = np.vstack(all_data)
+            train_y = np.vstack(all_targets)
+
+            # Fit the model
             model.fit(
                 train_X,
                 train_y,
                 epochs=self.nepochs,
                 callbacks=curr_callbacks,
-                validation_split=0.1  # or use a separate validation set if you have one
+                validation_split=0.1  # or a separate dev set if available
             )
             if model_file is not None:
                 model.load_weights(curr_model_file)
