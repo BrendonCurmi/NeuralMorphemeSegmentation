@@ -865,7 +865,7 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             np.random.shuffle(indexes)
         for i, bucket_indexes in indexes:
             curr_bucket, curr_targets = data[i], targets[i]
-            data_to_yield = [elem[bucket_indexes] for elem in curr_bucket]
+            data_to_yield = tuple(elem[bucket_indexes] for elem in curr_bucket)
             targets_to_yield = to_one_hot(curr_targets[bucket_indexes], classes_number)
             yield data_to_yield, targets_to_yield
         nsteps += 1
