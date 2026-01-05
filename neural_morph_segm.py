@@ -518,7 +518,7 @@ class Partitioner:
             symbol_embeddings = kl.Embedding(self.symbols_number_, self.embeddings_size,
                                              name="symbol_embeddings")(symbol_inputs)
         else:
-            symbol_embeddings = kl.Lambda(kb.one_hot, output_shape=(None, self.symbols_number_),
+            symbol_embeddings = kl.Lambda(tf.one_hot, output_shape=(None, self.symbols_number_),
                                           arguments={"num_classes": self.symbols_number_},
                                           name="symbol_embeddings")(symbol_inputs)
         inputs = [symbol_inputs]
