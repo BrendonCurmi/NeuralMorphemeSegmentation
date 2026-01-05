@@ -578,7 +578,7 @@ class Partitioner:
     def pad_or_truncate(self, batch, target_len=9):
         if batch.shape[1] > target_len:
             return batch[:, :target_len]
-            elif batch.shape[1] < target_len:
+        elif batch.shape[1] < target_len:
             pad_width = target_len - batch.shape[1]
             return np.pad(batch, ((0, 0), (0, pad_width)), mode='constant')
         return batch
