@@ -20,6 +20,7 @@ from tabled_trie import make_trie
 
 import tensorflow as tf
 import keras.backend as kb
+from keras.preprocessing.sequence import pad_sequences
 
 
 def read_config(infile):
