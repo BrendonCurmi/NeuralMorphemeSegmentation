@@ -512,15 +512,14 @@ class Partitioner:
         Функция, задающая архитектуру нейронной сети
         """
         # symbol_inputs: array, 1D-массив длины m
-        symbol_inputs = kl.Input(shape=(None,), dtype='uint8', name="symbol_inputs")
+        symbol_inputs = kl.Input(shape=(None,), dtype='uint32', name="symbol_inputs")
         # symbol_embeddings: array, 2D-массив размера m*self.symbols_number
         if self.use_embeddings:
             symbol_embeddings = kl.Embedding(self.symbols_number_, self.embeddings_size,
                                              name="symbol_embeddings")(symbol_inputs)
         else:
             symbol_embeddings = kl.Lambda(
-                lambda x: tf.one_hot(tf.cast(x, tf.int32), depth=self.symbols_number_),
-                output_shape=(None, self.symbols_number_),
+                lambda x: tf.one_hot(x, depth=self.symbols_number_),
                 name="symbol_embeddings"
             )(symbol_inputs)
         inputs = [symbol_inputs]
