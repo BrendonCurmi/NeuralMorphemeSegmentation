@@ -573,6 +573,19 @@ class Partitioner:
                       loss="categorical_crossentropy", metrics=["accuracy"])
         return model
 
+
+    def fix_batches(self, batches, expected_len=9):
+        fixed = []
+        for batch_inputs, batch_targets in batches:
+            # truncate or pad
+            if batch_inputs.shape[1] > expected_len:
+                batch_inputs = batch_inputs[:, :expected_len]
+            elif batch_inputs.shape[1] < expected_len:
+                pad_width = expected_len - batch_inputs.shape[1]
+                batch_inputs = np.pad(batch_inputs, ((0,0),(0,pad_width)), mode='constant')
+            fixed.append((batch_inputs, batch_targets))
+        return fixed
+
     def _train_models(self, data_by_buckets, targets_by_buckets,
                       dev_data_by_buckets=None, dev_targets_by_buckets=None, model_file=None):
         """
@@ -625,9 +638,17 @@ class Partitioner:
                 curr_callbacks = self.callbacks + [save_callback]
             else:
                 curr_callbacks = self.callbacks
-            model.fit(train_gen, steps_per_epoch=len(train_batches_indexes),
-                                epochs=self.nepochs, callbacks=curr_callbacks,
-                                validation_data=val_gen, validation_steps=len(dev_batches_indexes))
+            # Apply to your batches
+            train_batches = fix_batches(train_batches, expected_len=9)
+            dev_batches   = fix_batches(dev_batches, expected_len=9)
+            model.fit(
+                train_batches,
+                steps_per_epoch=len(train_batches_indexes),
+                epochs=self.nepochs,
+                callbacks=curr_callbacks,
+                validation_data=dev_batches,
+                validation_steps=len(dev_batches_indexes)
+            )
             if model_file is not None:
                 model.load_weights(curr_model_file)
         return self
