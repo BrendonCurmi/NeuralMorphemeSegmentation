@@ -844,7 +844,7 @@ class Partitioner:
 
 def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs=None):
     """
-    Fixed generator to ensure batch shapes match expected output dimensions.
+    Generator that ensures all batches have the same sequence length to match model input.
     """
     nsteps = 0
     while nepochs is None or nsteps < nepochs:
@@ -854,24 +854,32 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             curr_bucket = data[bucket_idx]
             curr_targets = targets[bucket_idx]
 
-            # Ensure all inputs have the same sequence length
-            padded_inputs = []
-            seq_len = curr_bucket[0].shape[1] if isinstance(curr_bucket, list) else curr_bucket.shape[1]
-            for inp_array in curr_bucket:
-                batch_inp = inp_array[batch_indexes]
-                if batch_inp.shape[1] != seq_len:
-                    pad_width = seq_len - batch_inp.shape[1]
-                    batch_inp = np.pad(batch_inp, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
-                padded_inputs.append(batch_inp)
+            # If input has multiple arrays (symbol_inputs + context_inputs)
+            if isinstance(curr_bucket, list):
+                batch_inputs = []
+                max_seq_len = max(arr.shape[1] for arr in curr_bucket)
+                for arr in curr_bucket:
+                    batch_arr = arr[batch_indexes]
+                    # pad to max_seq_len if necessary
+                    if batch_arr.shape[1] < max_seq_len:
+                        pad_width = max_seq_len - batch_arr.shape[1]
+                        if batch_arr.ndim == 2:
+                            batch_arr = np.pad(batch_arr, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
+                        elif batch_arr.ndim == 3:
+                            batch_arr = np.pad(batch_arr, ((0,0),(0,pad_width),(0,0)), mode='constant', constant_values=0)
+                    batch_inputs.append(batch_arr)
+            else:
+                batch_inputs = curr_bucket[batch_indexes]
+                max_seq_len = batch_inputs.shape[1]
 
-            # Ensure targets are one-hot and match batch seq_len
+            # Process targets: pad if necessary, then convert to one-hot
             batch_targets = curr_targets[batch_indexes]
-            if batch_targets.shape[1] != seq_len:
-                pad_width = seq_len - batch_targets.shape[1]
+            if batch_targets.shape[1] < max_seq_len:
+                pad_width = max_seq_len - batch_targets.shape[1]
                 batch_targets = np.pad(batch_targets, ((0,0),(0,pad_width)), mode='constant', constant_values=0)
-            targets_one_hot = np.eye(classes_number, dtype=np.float32)[batch_targets]
+            batch_targets_one_hot = np.eye(classes_number, dtype=np.float32)[batch_targets]
 
-            yield tuple(padded_inputs), targets_one_hot
+            yield (tuple(batch_inputs) if isinstance(batch_inputs, list) else batch_inputs, batch_targets_one_hot)
         nsteps += 1
 
 
