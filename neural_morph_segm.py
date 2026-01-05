@@ -864,9 +864,25 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             np.random.shuffle(indexes)
         for i, bucket_indexes in indexes:
             curr_bucket, curr_targets = data[i], targets[i]
-            data_to_yield = tuple(elem[bucket_indexes] for elem in curr_bucket)
-            targets_to_yield = to_one_hot(curr_targets[bucket_indexes], classes_number)
-            yield data_to_yield, targets_to_yield
+
+            # Pad input sequences dynamically to the max length in this batch
+            padded_inputs = []
+            for inp_array in curr_bucket:
+                # inp_array has shape (N, L) -> subset the batch
+                batch_inp = inp_array[bucket_indexes]
+                # find max length in this batch
+                max_len = max(len(seq) for seq in batch_inp)
+                # pad sequences to max_len
+                batch_inp_padded = pad_sequences(batch_inp, maxlen=max_len, padding='post', value=0)
+                padded_inputs.append(batch_inp_padded)
+
+            # Pad target sequences similarly
+            batch_targets = curr_targets[bucket_indexes]
+            max_len = max(len(seq) for seq in batch_targets)
+            targets_padded = pad_sequences(batch_targets, maxlen=max_len, padding='post', value=0)
+            targets_one_hot = to_one_hot(targets_padded, classes_number)
+
+            yield tuple(padded_inputs), targets_one_hot
         nsteps += 1
 
 
