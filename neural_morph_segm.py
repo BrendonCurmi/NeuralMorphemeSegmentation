@@ -575,9 +575,15 @@ class Partitioner:
 
 
 
-    def pad_or_truncate(self, batch, target_len=10):  # Make sure target_len matches your model input
-        """Pad or truncate a 2D numpy array to a fixed number of columns."""
+    def pad_or_truncate(self, batch, target_len=10):
+        """
+        Ensure batch is a 2D numpy array with shape (num_samples, target_len)
+        If batch is 1D, expand dims to make it 2D.
+        Then pad or truncate columns to match target_len.
+        """
         batch = np.array(batch)
+        if batch.ndim == 1:
+            batch = np.expand_dims(batch, axis=0)  # make it (1, len(batch))
         if batch.shape[1] > target_len:
             return batch[:, :target_len]
         elif batch.shape[1] < target_len:
@@ -638,7 +644,7 @@ class Partitioner:
             else:
                 curr_callbacks = self.callbacks
 
-            # Process data by buckets
+            # Process each bucket
             for bucket_idx in range(len(data_by_buckets)):
                 data_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in data_by_buckets[bucket_idx]]
                 targets_by_buckets[bucket_idx] = [self.pad_or_truncate(batch, target_len=10) for batch in targets_by_buckets[bucket_idx]]
@@ -653,7 +659,7 @@ class Partitioner:
                 train_y,
                 epochs=self.nepochs,
                 callbacks=curr_callbacks,
-                validation_split=0.1  # or use dev set if available
+                validation_split=0.1
             )
             if model_file is not None:
                 model.load_weights(curr_model_file)
