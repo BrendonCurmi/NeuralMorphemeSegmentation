@@ -871,16 +871,15 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             for inp_array in curr_bucket:
                 # inp_array has shape (N, L) -> subset the batch
                 batch_inp = inp_array[bucket_indexes]
-                # find max length in this batch
-                max_len = max(len(seq) for seq in batch_inp)
-                # pad sequences to max_len
-                batch_inp_padded = pad_sequences(batch_inp, maxlen=max_len, padding='post', value=0)
+                # Use bucket length from data[i][0].shape[1] instead of batch max
+                bucket_len = curr_bucket[0].shape[1]
+                batch_inp_padded = pad_sequences(batch_inp, maxlen=bucket_len, padding='post', value=0)
                 padded_inputs.append(batch_inp_padded)
 
             # Pad target sequences similarly
             batch_targets = curr_targets[bucket_indexes]
-            max_len = max(len(seq) for seq in batch_targets)
-            targets_padded = pad_sequences(batch_targets, maxlen=max_len, padding='post', value=0)
+            bucket_len = curr_targets.shape[1]
+            targets_padded = pad_sequences(batch_targets, maxlen=bucket_len, padding='post', value=0)
             targets_one_hot = to_one_hot(targets_padded, classes_number)
 
             yield tuple(padded_inputs), targets_one_hot
