@@ -910,7 +910,6 @@ def generate_data(data, targets, indexes, classes_number, shuffle=False, nepochs
             bucket_len = curr_targets.shape[1]
             targets_padded = pad_sequences(batch_targets, maxlen=bucket_len, padding='post', value=0)
             targets_one_hot = to_one_hot(targets_padded, classes_number)
-            print("Yielding:", padded_inputs[0].shape)
 
             yield tuple(padded_inputs), targets_one_hot
         nsteps += 1
