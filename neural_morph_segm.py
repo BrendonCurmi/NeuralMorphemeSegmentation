@@ -594,40 +594,69 @@ class Partitioner:
             train_targets, dev_targets = targets_by_buckets, dev_targets_by_buckets
         else:
             for bucket in data_by_buckets:
-                # разбиваем каждую корзину на обучающую и валидационную выборку
                 L = len(bucket[0])
                 indexes_for_bucket = list(range(L))
                 np.random.shuffle(indexes_for_bucket)
-                train_bucket_length = int(L*(1.0 - self.validation_split))
+                train_bucket_length = int(L * (1.0 - self.validation_split))
                 train_indexes_by_buckets.append(indexes_for_bucket[:train_bucket_length])
                 dev_indexes_by_buckets.append(indexes_for_bucket[train_bucket_length:])
             train_data, dev_data = data_by_buckets, data_by_buckets
             train_targets, dev_targets = targets_by_buckets, targets_by_buckets
-        # разбиваем на батчи обучающую и валидационную выборку
-        # (для валидационной этого можно не делать, а подавать сразу корзины)
-        train_batches_indexes = list(chain.from_iterable(
-            [[(i, elem[j:j+self.batch_size]) for j in range(0, len(elem), self.batch_size)]
-             for i, elem in enumerate(train_indexes_by_buckets)]))
-        dev_batches_indexes = list(chain.from_iterable(
-            [[(i, elem[j:j+self.batch_size]) for j in range(0, len(elem), self.batch_size)]
-             for i, elem in enumerate(dev_indexes_by_buckets)]))
-        # поскольку функции fit_generator нужен генератор, порождающий batch за batch'ем,
-        # то приходится заводить генераторы для обеих выборок
-        train_gen = generate_data(train_data, train_targets, train_batches_indexes,
-                                  classes_number=self.target_symbols_number_, shuffle=True)
-        val_gen = generate_data(dev_data, dev_targets, dev_batches_indexes,
-                                classes_number=self.target_symbols_number_, shuffle=False)
-        for i, model in enumerate(self.models_):
+
+        for m, model in enumerate(self.models_):
             if model_file is not None:
-                curr_model_file = make_model_file(model_file, i+1)
-                # для сохранения модели с наилучшим результатом на валидационной выборке
-                save_callback = ModelCheckpoint(curr_model_file, save_weights_only=True, save_best_only=True)
+                curr_model_file = make_model_file(model_file, m + 1)
+                save_callback = ModelCheckpoint(
+                    curr_model_file, save_weights_only=True, save_best_only=True
+                )
                 curr_callbacks = self.callbacks + [save_callback]
             else:
                 curr_callbacks = self.callbacks
-            model.fit(train_gen, steps_per_epoch=len(train_batches_indexes),
-                      epochs=self.nepochs, callbacks=curr_callbacks,
-                      validation_data=val_gen, validation_steps=len(dev_batches_indexes))
+
+            for epoch in range(self.nepochs):
+                for bucket_id in range(len(train_indexes_by_buckets)):
+                    train_idx = train_indexes_by_buckets[bucket_id]
+                    if not train_idx:
+                        continue
+
+                    train_batches = [
+                        (bucket_id, train_idx[i:i + self.batch_size])
+                        for i in range(0, len(train_idx), self.batch_size)
+                    ]
+
+                    train_gen = generate_data(
+                        train_data, train_targets, train_batches,
+                        classes_number=self.target_symbols_number_,
+                        shuffle=True, nepochs=1
+                    )
+
+                    if dev_data_by_buckets is not None:
+                        dev_idx = dev_indexes_by_buckets[bucket_id]
+                        dev_batches = [
+                            (bucket_id, dev_idx[i:i + self.batch_size])
+                            for i in range(0, len(dev_idx), self.batch_size)
+                        ]
+                        val_gen = generate_data(
+                            dev_data, dev_targets, dev_batches,
+                            classes_number=self.target_symbols_number_,
+                            shuffle=False, nepochs=1
+                        )
+                        model.fit(
+                            train_gen,
+                            steps_per_epoch=len(train_batches),
+                            epochs=1,
+                            callbacks=curr_callbacks,
+                            validation_data=val_gen,
+                            validation_steps=len(dev_batches)
+                        )
+                    else:
+                        model.fit(
+                            train_gen,
+                            steps_per_epoch=len(train_batches),
+                            epochs=1,
+                            callbacks=curr_callbacks
+                        )
+
             if model_file is not None:
                 model.load_weights(curr_model_file)
         return self
