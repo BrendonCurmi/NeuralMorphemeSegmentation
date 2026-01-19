@@ -284,7 +284,7 @@ class Partitioner:
             self.callbacks = []
         if (self.early_stopping is not None and
                 not any(isinstance(x, EarlyStopping) for x in self.callbacks)):
-            self.callbacks.append(EarlyStopping(patience=self.early_stopping, monitor="val_accuracy"))
+            self.callbacks.append(EarlyStopping(patience=self.early_stopping, monitor="val_accuracy", mode="max"))
         if self.use_morpheme_types:
             self._morpheme_memo_func = self._make_morpheme_data
         else:
@@ -654,7 +654,7 @@ class Partitioner:
                             train_gen,
                             steps_per_epoch=len(train_batches),
                             epochs=1,
-                            callbacks=curr_callbacks
+                            callbacks=[curr_callbacks]
                         )
 
             if model_file is not None:
